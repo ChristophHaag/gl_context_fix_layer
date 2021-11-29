@@ -9,7 +9,9 @@ class GLApi
 {
 public:
 	virtual void
-	make_current() = 0;
+	store_current() = 0;
+	virtual void
+	restore() = 0;
 	virtual ~GLApi(){};
 };
 
@@ -18,7 +20,7 @@ const char *_layerName = "gl_context_fix";
 
 #define XR_USE_GRAPHICS_API_OPENGL
 
-// #define VERBOSE
+#define VERBOSE
 
 #ifdef __linux__
 
@@ -35,6 +37,9 @@ class GLXApi : public GLApi
 {
 	struct XrGraphicsBindingOpenGLXlibKHR binding;
 
+	GLXContext context = NULL;
+	GLXDrawable drawable = None;
+
 public:
 	GLXApi(struct XrGraphicsBindingOpenGLXlibKHR *glx_binding)
 	{
@@ -45,10 +50,52 @@ public:
 	}
 
 	void
-	make_current() override
+	store_current() override
+	{
+		if (context != NULL) {
+			context = glXGetCurrentContext();
+		} else {
+#ifdef VERBOSE
+			log << " context == NULL, not storing" << std::endl;
+#endif
+		}
+		if (drawable != None) {
+			drawable = glXGetCurrentDrawable();
+		} else {
+#ifdef VERBOSE
+			log << " drawable == None, not storing" << std::endl;
+#endif
+		}
+
+#ifdef VERBOSE
+		log << "GLX graphics binding: display " << binding.xDisplay << ", drawable " << binding.glxDrawable
+		    << ", context " << binding.glxContext << std::endl;
+		log << "store: display " << binding.xDisplay << ", drawable " << drawable << ", context " << context
+		    << std::endl;
+#endif
+	}
+
+
+	void
+	restore() override
 	{
 		glXMakeCurrent(binding.xDisplay, None, NULL);
-		glXMakeCurrent(binding.xDisplay, binding.glxDrawable, binding.glxContext);
+
+		if (context == NULL || drawable == None) {
+			glXMakeCurrent(binding.xDisplay, binding.glxDrawable, binding.glxContext);
+			log << "restoring GLX graphics binding: display " << binding.xDisplay << ", drawable "
+			    << binding.glxDrawable << ", context " << binding.glxContext << std::endl;
+			log << "NOT restoring: display " << binding.xDisplay << ", drawable " << drawable
+			    << ", context " << context << std::endl;
+		} else {
+			glXMakeCurrent(binding.xDisplay, drawable, context);
+#ifdef VERBOSE
+			log << "GLX graphics binding: display " << binding.xDisplay << ", drawable "
+			    << binding.glxDrawable << ", context " << binding.glxContext << std::endl;
+			log << "restoring: display " << binding.xDisplay << ", drawable " << drawable << ", context "
+			    << context << std::endl;
+#endif
+		}
 	}
 };
 #else
@@ -97,9 +144,11 @@ _xrEndFrame(XrSession session, const XrFrameEndInfo *frameEndInfo)
 	log << __FUNCTION__ << std::endl;
 #endif
 
+	if (gl_api)
+		gl_api->store_current();
 	XrResult res = _nextxrEndFrame(session, frameEndInfo);
 	if (gl_api)
-		gl_api->make_current();
+		gl_api->restore();
 	return res;
 }
 
@@ -110,9 +159,11 @@ _xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo *createInfo, X
 	log << __FUNCTION__ << std::endl;
 #endif
 
+	if (gl_api)
+		gl_api->store_current();
 	XrResult res = _nextxrCreateSwapchain(session, createInfo, swapchain);
 	if (gl_api)
-		gl_api->make_current();
+		gl_api->restore();
 	return res;
 }
 
@@ -123,9 +174,11 @@ _xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAcquireInf
 	log << __FUNCTION__ << std::endl;
 #endif
 
+	if (gl_api)
+		gl_api->store_current();
 	XrResult res = _nextxrAcquireSwapchainImage(swapchain, acquireInfo, index);
 	if (gl_api)
-		gl_api->make_current();
+		gl_api->restore();
 	return res;
 }
 
@@ -136,9 +189,11 @@ _xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo *wai
 	log << __FUNCTION__ << std::endl;
 #endif
 
+	if (gl_api)
+		gl_api->store_current();
 	XrResult res = _nextxrWaitSwapchainImage(swapchain, waitInfo);
 	if (gl_api)
-		gl_api->make_current();
+		gl_api->restore();
 	return res;
 }
 
@@ -149,9 +204,11 @@ _xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInf
 	log << __FUNCTION__ << std::endl;
 #endif
 
+	if (gl_api)
+		gl_api->store_current();
 	XrResult res = _nextxrReleaseSwapchainImage(swapchain, releaseInfo);
 	if (gl_api)
-		gl_api->make_current();
+		gl_api->restore();
 	return res;
 }
 

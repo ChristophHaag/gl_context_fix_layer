@@ -47,6 +47,7 @@ public:
 	void
 	make_current() override
 	{
+		glXMakeCurrent(binding.xDisplay, None, NULL);
 		glXMakeCurrent(binding.xDisplay, binding.glxDrawable, binding.glxContext);
 	}
 };
